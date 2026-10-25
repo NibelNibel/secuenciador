@@ -27,6 +27,8 @@ jobs:
           [ -n "$rutaZip" ] || { echo "No hay ningún .zip en la raíz del repositorio"; exit 1; }
           echo "Usando: $rutaZip"
           unzip -q -o "$rutaZip" -d proyecto_descomprimido
+          # Nibel: algunos zips traen las carpetas sin permisos, así que se los damos para poder entrar
+          chmod -R u+rwX proyecto_descomprimido
           # Nibel: el proyecto es la carpeta que contiene capacitor.config.json
           configuracion=$(find proyecto_descomprimido -name capacitor.config.json -not -path '*/node_modules/*' | head -n 1)
           [ -n "$configuracion" ] || { echo "El zip no contiene capacitor.config.json"; exit 1; }
