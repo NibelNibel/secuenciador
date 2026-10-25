@@ -1,23 +1,67 @@
-name: Compilar APK
+name: Compilar APK Sonavia
+
+# Nibel: se ejecuta solo cuando subes un .zip a main (o a mano desde la pestaña Actions)
 on:
+  push:
+    branches: [main]
+    paths:
+      - '*.zip'
   workflow_dispatch:
+
 jobs:
   apk:
     runs-on: ubuntu-24.04
     steps:
+      # Nibel: historial completo para poder saber cuál es el zip más reciente
       - uses: actions/checkout@v4
-      - name: Descomprimir proyecto
-        run: unzip -q secuenciador-notas-android.zip
+        with:
+          fetch-depth: 0
+
+      - name: Buscar y descomprimir el zip
+        run: |
+          set -euo pipefail
+          # Nibel: elige el zip que se subió más recientemente al repositorio
+          rutaZip=$(for f in *.zip; do
+            [ -f "$f" ] && echo "$(git log -1 --format=%ct -- "$f") $f"
+          done | sort -rn | head -n 1 | cut -d' ' -f2-)
+          [ -n "$rutaZip" ] || { echo "No hay ningún .zip en la raíz del repositorio"; exit 1; }
+          echo "Usando: $rutaZip"
+          unzip -q -o "$rutaZip" -d proyecto_descomprimido
+          # Nibel: el proyecto es la carpeta que contiene capacitor.config.json
+          configuracion=$(find proyecto_descomprimido -name capacitor.config.json -not -path '*/node_modules/*' | head -n 1)
+          [ -n "$configuracion" ] || { echo "El zip no contiene capacitor.config.json"; exit 1; }
+          echo "CARPETA_PROYECTO=$(dirname "$configuracion")" >> "$GITHUB_ENV"
+
+      - name: Poner el nombre Sonavia
+        working-directory: ${{ env.CARPETA_PROYECTO }}
+        run: |
+          # Nibel: cambia el nombre que se ve en el celular, sin tocar el appId para que se pueda actualizar encima
+          sed -i 's/"appName": *"[^"]*"/"appName": "Sonavia"/' capacitor.config.json
+          grep '"appName": "Sonavia"' capacitor.config.json
+          chmod +x scripts/*.sh
+
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with:
+          node-version: 20
+
       - uses: actions/setup-java@v5
-        with: { distribution: temurin, java-version: 21 }
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Aceptar licencias del Android SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
       - name: Compilar
-        working-directory: secuenciador-notas-android
+        working-directory: ${{ env.CARPETA_PROYECTO }}
         run: ./scripts/build-android.sh
+
+      - name: Renombrar el APK
+        working-directory: ${{ env.CARPETA_PROYECTO }}
+        run: mv secuenciador-notas.apk Sonavia.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: secuenciador-notas-apk
-          path: secuenciador-notas-android/secuenciador-notas.apk
+          name: Sonavia-apk
+          path: ${{ env.CARPETA_PROYECTO }}/Sonavia.apk
+          
